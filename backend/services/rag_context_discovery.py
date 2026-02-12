@@ -40,8 +40,7 @@ class RAGContextDiscovery:
             # Build search query from user context
             search_query = self._build_search_query(user_context)
             
-            # TODO: Integrate with actual SearchEngine
-            # For now, simulate RAG search
+            # Search for relevant historical RFPs
             relevant_rfps = await self._search_historical_rfps(search_query, user_context)
             
             # Extract insights from found RFPs
@@ -89,39 +88,40 @@ class RAGContextDiscovery:
     ) -> List[Dict[str, Any]]:
         """
         Search historical RFPs using RAG system
-        
-        TODO: Replace with actual SearchEngine integration
         """
-        # Simulate RAG search results
-        # In production, this would call:
-        # from rag_engine.search_engine import SearchEngine
-        # search_engine = SearchEngine()
-        # results = search_engine.search_templates(
-        #     query=query,
-        #     filters={"rfp_type": context.get("rfp_type")},
-        #     limit=5
-        # )
-        
-        # Mock results for now
-        mock_results = [
-            {
-                "doc_name": f"RFP_{context.get('service', 'Service')}_2024.docx",
-                "similarity": 92.5,
-                "rfp_type": context.get("rfp_type", "Service_Agreement"),
-                "sections_found": ["Scope of Work", "Technical Requirements", "Evaluation Criteria"],
-                "summary": f"Historical RFP for {context.get('service', 'professional services')} with similar requirements"
-            },
-            {
-                "doc_name": f"RFP_{context.get('rfp_type', 'Services')}_2023.docx",
-                "similarity": 87.3,
-                "rfp_type": context.get("rfp_type", "Service_Agreement"),
-                "sections_found": ["Deliverables", "Timeline & Milestones"],
-                "summary": "Previous RFP with relevant timeline and deliverables structure"
-            }
-        ]
-        
-        logger.info(f"Found {len(mock_results)} relevant historical RFPs")
-        return mock_results
+        try:
+            from rag_engine.search_engine import SearchEngine
+            search_engine = SearchEngine()
+            
+            # Prepare filters based on context
+            filters = {}
+            if context.get("rfp_type"):
+                filters["rfp_type"] = context.get("rfp_type")
+                
+            results = search_engine.search_templates(
+                query=query,
+                filters=filters,
+                limit=5
+            )
+            
+            logger.info(f"Found {len(results)} relevant historical RFPs")
+            
+            # Process results to match expected format
+            formatted_results = []
+            for r in results:
+                formatted_results.append({
+                    "doc_name": r.get('metadata', {}).get('filename', 'Unknown'),
+                    "similarity": round((1 - r.get('distance', 0)) * 100, 1),
+                    "rfp_type": r.get('metadata', {}).get('rfp_type', 'Unknown'),
+                    "sections_found": [], # TODO: Extract sections from metadata if available
+                    "summary": r.get('metadata', {}).get('content_summary', '')
+                })
+                
+            return formatted_results
+            
+        except Exception as e:
+            logger.error(f"Error searching historical RFPs: {e}")
+            return []
     
     async def _extract_insights(
         self, 
